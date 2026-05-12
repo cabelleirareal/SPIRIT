@@ -1,0 +1,27 @@
+{
+  "name": "spirit-gateway",
+  "version": "1.0.0",
+  "description": "SPIRIT Gateway - Multi-channel AI orchestration",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "ioredis": "^5.3.2",
+    "@whiskeysockets/baileys": "^6.5.0",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

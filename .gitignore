@@ -1,0 +1,102 @@
+# ============================================
+# SPIRIT - Git Ignore
+# ============================================
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+.eggs/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# Cache
+.cache/
+.npm/
+.eslintcache
+.pytest_cache/
+
+# OS
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Backups
+*.bak
+*.backup
+backup/
+
+# Session data
+sessions/
+.openclaw/whatsapp-session/
+
+# Hermes data
+.hermes/sessions/
+.hermes/memory/
+
+# Coverage
+coverage/
+.nyc_output/
+*.coverage
+
+# Docker volumes data
+postgres-data/
+redis-data/
+qdrant-data/
+
+# Local development
+local/
+.local/

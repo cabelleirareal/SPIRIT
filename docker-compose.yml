@@ -1,0 +1,253 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # GATEWAY - OpenClaw
+  # ============================================
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: spirit-gateway
+    ports:
+      - "18789:18789"
+    environment:
+      - NODE_ENV=production
+      - PORT=18789
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://spirit:${POSTGRES_PASSWORD}@postgres:5432/spirit
+    volumes:
+      - gateway-data:/app/data
+      - gateway-sessions:/app/sessions
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # AGENTS - Hermes Orchestrator
+  # ============================================
+  orchestrator:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.orchestrator
+    container_name: spirit-orchestrator
+    environment:
+      - HERMES_PROFILE=orchestrator
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://spirit:${POSTGRES_PASSWORD}@postgres:5432/spirit
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      - hermes-data:/root/.hermes
+      - agent-skills:/root/.hermes/skills
+    depends_on:
+      - redis
+      - postgres
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # AGENTS - Hermes Workers
+  # ============================================
+  worker:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.worker
+    environment:
+      - HERMES_PROFILE=worker
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - agent-skills:/root/.hermes/skills
+    depends_on:
+      - redis
+      - orchestrator
+    deploy:
+      replicas: 3
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # WEB UI - Open-WebUI
+  # ============================================
+  webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: spirit-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WEBUI_SECRET_KEY=${JWT_SECRET}
+      - DATABASE_URL=postgresql://spirit:${POSTGRES_PASSWORD}@postgres:5432/webui
+    volumes:
+      - webui-data:/app/backend/data
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # WORKFLOWS - Langflow
+  # ============================================
+  langflow:
+    image: langflowai/langflow:latest
+    container_name: spirit-langflow
+    ports:
+      - "7860:7860"
+    environment:
+      - LANGFLOW_DATABASE_URL=postgresql://spirit:${POSTGRES_PASSWORD}@postgres:5432/langflow
+      - LANGFLOW_CONFIG_DIR=/app/config
+    volumes:
+      - langflow-data:/app/config
+      - ./workflows:/app/flows
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # DATABASE - PostgreSQL
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: spirit-postgres
+    environment:
+      - POSTGRES_USER=spirit
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=spirit
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # CACHE - Redis
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: spirit-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # VECTOR DB - Qdrant
+  # ============================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: spirit-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # REVERSE PROXY - Nginx
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: spirit-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - gateway
+      - webui
+      - langflow
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # MONITORING - Prometheus
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: spirit-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+  # ============================================
+  # MONITORING - Grafana
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: spirit-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infra/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - spirit-network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  gateway-data:
+  gateway-sessions:
+  hermes-data:
+  agent-skills:
+  webui-data:
+  langflow-data:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+  nginx-logs:
+  prometheus-data:
+  grafana-data:
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  spirit-network:
+    driver: bridge

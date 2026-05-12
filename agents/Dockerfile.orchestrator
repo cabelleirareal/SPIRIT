@@ -1,0 +1,39 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Hermes Agent
+RUN pip install --no-cache-dir \
+    anthropic \
+    openai \
+    google-generativeai \
+    redis \
+    psycopg2-binary \
+    qdrant-client \
+    langchain \
+    langchain-anthropic \
+    langchain-openai \
+    firecrawl-py \
+    python-dotenv
+
+# Copy agent files
+COPY orchestrator/ /app/orchestrator/
+COPY skills/ /root/.hermes/skills/
+
+# Environment
+ENV HERMES_PROFILE=orchestrator
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD python -c "import sys; sys.exit(0)"
+
+# Start orchestrator
+CMD ["python", "orchestrator/main.py"]
